@@ -4,8 +4,8 @@ import java.util.*;
 
 public class GameServer {
     private static final int PORT = 12345;
-    private Map<String, Player> players = new HashMap<>();
-    private Set<Position> treasures = new HashSet<>();
+    private final Map<String, Player> players = new HashMap<>();
+    private final Set<Position> treasures = new HashSet<>();
 
     public static void main(String[] args) {
         new GameServer().start();
@@ -13,19 +13,19 @@ public class GameServer {
 
     public void start() {
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
-            System.out.println("Server started on port " + PORT);
+            System.out.println("TreasureHunt Server started on port " + PORT);
 
             // Add some treasures to the game map for testing
             treasures.add(new Position(2, 2));
             treasures.add(new Position(5, 7));
             treasures.add(new Position(9, 3));
 
-            while (true) {
+            while (!Thread.currentThread().isInterrupted()) {
                 Socket socket = serverSocket.accept();
                 new Thread(new ClientHandler(socket)).start();
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Error starting server: " + e.getMessage());
         }
     }
 
@@ -46,7 +46,7 @@ public class GameServer {
     }
 
     private class ClientHandler implements Runnable {
-        private Socket socket;
+        private final Socket socket;
         private String playerName;
         private PrintWriter out;
 
@@ -73,7 +73,7 @@ public class GameServer {
                     handleCommand(input, player);
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                System.err.println("Error handling client: " + e.getMessage());
             } finally {
                 if (playerName != null) {
                     players.remove(playerName);
@@ -83,7 +83,7 @@ public class GameServer {
                 try {
                     socket.close();
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    System.err.println("Error closing socket: " + e.getMessage());
                 }
             }
         }
@@ -118,7 +118,7 @@ public class GameServer {
 }
 
 class Player {
-    private String name;
+    private final String name;
     private Position position;
     private PrintWriter out;
 
