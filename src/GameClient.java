@@ -1,34 +1,86 @@
-import java.io.*;
-import java.net.*;
+import javafx.application.Application;
+import javafx.scene.Scene;
+import javafx.scene.control.Label;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
 
-public class GameClient {
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.Socket;
+
+public class GameClient extends Application {
+    private static final String SERVER_ADDRESS = "localhost";
+    private static final int SERVER_PORT = 12345;
+
+    private PrintWriter out;
+    private BufferedReader in;
+    private Socket socket;
+
+    private TextArea gameStateArea;
+    private TextField commandField;
+
     public static void main(String[] args) {
-        try (Socket socket = new Socket("localhost", 12345)) {
-            System.out.println("Connected to server!");
+        launch(args);
+    }
 
-            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-            BufferedReader console = new BufferedReader(new InputStreamReader(System.in));
+    @Override
+    public void start(Stage primaryStage) {
+        VBox root = new VBox();
 
-            // Start a thread to listen to server messages
-            new Thread(() -> {
-                String message;
-                try {
-                    while ((message = in.readLine()) != null) {
-                        System.out.println(message);
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }).start();
+        gameStateArea = new TextArea();
+        gameStateArea.setEditable(false);
+        gameStateArea.setPrefHeight(400);
 
-            // Main thread handles user input
-            String input;
-            while ((input = console.readLine()) != null) {
-                out.println(input);
+        commandField = new TextField();
+        commandField.setPromptText("Enter command (UP, DOWN, LEFT, RIGHT, DIG)");
+        commandField.setOnAction(event -> sendCommand(commandField.getText()));
+
+        root.getChildren().addAll(new Label("Game State:"), gameStateArea, commandField);
+
+        Scene scene = new Scene(root, 400, 500);
+        primaryStage.setTitle("Treasure Hunt Game Client");
+        primaryStage.setScene(scene);
+        primaryStage.show();
+
+        // Start the client-side connection to the server
+        new Thread(this::connectToServer).start();
+    }
+
+    // Connect to the server
+    private void connectToServer() {
+        try (Socket socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
+             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+             PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
+    
+            this.out = out;
+    
+            // Read server messages in a separate thread
+            String message;
+            while ((message = in.readLine()) != null) {
+                // Update the game state area when new messages are received
+                updateGameState(message);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            // Replace with more robust logging
+            System.err.println("Error connecting to server: " + e.getMessage());
         }
+    }
+
+    // Send commands to the server
+    private void sendCommand(String command) {
+        if (command != null && !command.isEmpty()) {
+            out.println(command);
+            commandField.clear();
+        }
+    }
+
+    // Update the game state area with the latest game information
+    private void updateGameState(String message) {
+        // Append the new message to the text area
+        gameStateArea.appendText(message + "\n");
     }
 }

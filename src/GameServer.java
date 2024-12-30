@@ -4,175 +4,184 @@ import java.util.*;
 
 public class GameServer {
     private static final int PORT = 12345;
-    private final Map<String, Player> players = new HashMap<>();
-    private final Set<Position> treasures = new HashSet<>();
+    private static final int GRID_SIZE = 10;  // Assuming a 10x10 grid
+    private static final String TREASURE = "T"; // Treasure symbol
+    private static final String EMPTY = ".";   // Empty space symbol
+
+    private static List<Player> players = new ArrayList<>();
+    private static Map<Player, PrintWriter> playerWriters = new HashMap<>();
+
+    private static Random random = new Random();
+
+    private static int treasureX;
+    private static int treasureY;
 
     public static void main(String[] args) {
-        new GameServer().start();
-    }
-
-    public void start() {
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
-            System.out.println("TreasureHunt Server started on port " + PORT);
-
-            // Add some treasures to the game map for testing
-            treasures.add(new Position(2, 2));
-            treasures.add(new Position(5, 7));
-            treasures.add(new Position(9, 3));
-
-            while (!Thread.currentThread().isInterrupted()) {
-                Socket socket = serverSocket.accept();
-                new Thread(new ClientHandler(socket)).start();
+            System.out.println("Server started on port " + PORT + "...");
+    
+            // Generate random treasure location
+            treasureX = random.nextInt(GRID_SIZE);
+            treasureY = random.nextInt(GRID_SIZE);
+            System.out.println("Treasure is located at: (" + treasureX + ", " + treasureY + ")");
+    
+            while (true) {
+                Socket clientSocket = serverSocket.accept();
+                System.out.println("Client connected!");
+    
+                // Create a new player and a thread to handle this player
+                Player player = new Player(clientSocket);
+                players.add(player);
+                new Thread(new ClientHandler(player)).start();
             }
         } catch (IOException e) {
-            System.err.println("Error starting server: " + e.getMessage());
+            e.printStackTrace(); // Consider replacing with a logging framework
         }
     }
 
-    private void broadcastGameState() {
-        for (String playerName : players.keySet()) {
-            Player player = players.get(playerName);
-            broadcast("UPDATE: PLAYER " + playerName + " " + player.getPosition().x + " " + player.getPosition().y);
-        }
-        for (Position treasure : treasures) {
-            broadcast("UPDATE: TREASURE " + treasure.x + " " + treasure.y);
-        }
-    }
+    // Handle communication with each player
+    private static class ClientHandler implements Runnable {
+        private Player player;
 
-    private void broadcast(String message) {
-        for (Player player : players.values()) {
-            player.getOut().println(message);
-        }
-    }
-
-    private class ClientHandler implements Runnable {
-        private final Socket socket;
-        private String playerName;
-        private PrintWriter out;
-
-        public ClientHandler(Socket socket) {
-            this.socket = socket;
+        public ClientHandler(Player player) {
+            this.player = player;
         }
 
         @Override
         public void run() {
-            try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
-                out = new PrintWriter(socket.getOutputStream(), true);
+            try {
+                BufferedReader in = new BufferedReader(new InputStreamReader(player.socket.getInputStream()));
+                PrintWriter out = new PrintWriter(player.socket.getOutputStream(), true);
+                playerWriters.put(player, out);
 
+                // Greet the player
                 out.println("Welcome! Enter your name:");
-                playerName = in.readLine();
-                Player player = new Player(playerName, new Position(0, 0));
-                player.setOut(out);
-                players.put(playerName, player);
-                broadcast(playerName + " has joined the game!");
+                String playerName = in.readLine();
+                player.setName(playerName);
 
+                // Start broadcasting game state
                 broadcastGameState();
 
-                String input;
-                while ((input = in.readLine()) != null) {
-                    handleCommand(input, player);
+                String command;
+                while ((command = in.readLine()) != null) {
+                    // Handle the player's command
+                    handleCommand(command, player);
                 }
             } catch (IOException e) {
-                System.err.println("Error handling client: " + e.getMessage());
-            } finally {
-                if (playerName != null) {
-                    players.remove(playerName);
-                    broadcast(playerName + " has left the game.");
-                    broadcastGameState();
-                }
-                try {
-                    socket.close();
-                } catch (IOException e) {
-                    System.err.println("Error closing socket: " + e.getMessage());
-                }
+                e.printStackTrace();
             }
         }
 
+        // Handle player commands (UP, DOWN, LEFT, RIGHT, DIG)
         private void handleCommand(String command, Player player) {
             switch (command.toUpperCase()) {
                 case "UP":
-                    player.move(0, -1);
+                    player.moveUp();
                     break;
                 case "DOWN":
-                    player.move(0, 1);
+                    player.moveDown();
                     break;
                 case "LEFT":
-                    player.move(-1, 0);
+                    player.moveLeft();
                     break;
                 case "RIGHT":
-                    player.move(1, 0);
+                    player.moveRight();
                     break;
                 case "DIG":
-                    if (treasures.remove(player.getPosition())) {
-                        broadcast(player.getName() + " found a treasure!");
+                    if (player.getX() == treasureX && player.getY() == treasureY) {
+                        broadcastTreasureFound(player);
                     } else {
-                        out.println("No treasure here!");
+                        player.sendMessage("No treasure here. Keep searching!");
                     }
                     break;
                 default:
-                    out.println("Invalid command!");
+                    player.sendMessage("Invalid command. Use UP, DOWN, LEFT, RIGHT, or DIG.");
+                    break;
             }
+
+            // Broadcast the updated game state after each command
             broadcastGameState();
         }
     }
-}
 
-class Player {
-    private final String name;
-    private Position position;
-    private PrintWriter out;
+    // Broadcast game state to all players
+    private static void broadcastGameState() {
+        StringBuilder gameState = new StringBuilder("Current Game State:\n");
 
-    public Player(String name, Position position) {
-        this.name = name;
-        this.position = position;
+        // Show player positions
+        for (Player player : players) {
+            gameState.append(player.getName())
+                    .append(" is at position: ")
+                    .append("(").append(player.getX()).append(", ").append(player.getY()).append(")\n");
+        }
+
+        // Send the game state to all players
+        for (PrintWriter writer : playerWriters.values()) {
+            writer.println(gameState.toString());
+        }
     }
 
-    public void setOut(PrintWriter out) {
-        this.out = out;
+    // Broadcast the event when a player finds the treasure
+    private static void broadcastTreasureFound(Player player) {
+        String message = player.getName() + " has found the treasure!";
+        for (PrintWriter writer : playerWriters.values()) {
+            writer.println(message);
+        }
+        System.out.println(message);
     }
 
-    public PrintWriter getOut() {
-        return out;
-    }
+    // Player class to handle player-specific data
+    private static class Player {
+        private String name;
+        private int x, y;
+        private Socket socket;
 
-    public Position getPosition() {
-        return position;
-    }
+        public Player(Socket socket) {
+            this.socket = socket;
+            this.x = random.nextInt(GRID_SIZE);  // Random starting position
+            this.y = random.nextInt(GRID_SIZE);  // Random starting position
+        }
 
-    public void move(int dx, int dy) {
-        position.move(dx, dy);
-    }
+        // Getters and setters
+        public String getName() {
+            return name;
+        }
 
-    public String getName() {
-        return name;
-    }
-}
+        public void setName(String name) {
+            this.name = name;
+        }
 
-class Position {
-    int x, y;
+        public int getX() {
+            return x;
+        }
 
-    public Position(int x, int y) {
-        this.x = x;
-        this.y = y;
-    }
+        public int getY() {
+            return y;
+        }
 
-    public void move(int dx, int dy) {
-        x += dx;
-        y += dy;
-        x = Math.max(0, Math.min(9, x));
-        y = Math.max(0, Math.min(9, y));
-    }
+        // Move player in different directions
+        public void moveUp() {
+            if (y > 0) y--;
+        }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Position position = (Position) o;
-        return x == position.x && y == position.y;
-    }
+        public void moveDown() {
+            if (y < GRID_SIZE - 1) y++;
+        }
 
-    @Override
-    public int hashCode() {
-        return Objects.hash(x, y);
+        public void moveLeft() {
+            if (x > 0) x--;
+        }
+
+        public void moveRight() {
+            if (x < GRID_SIZE - 1) x++;
+        }
+
+        // Send a message to the player
+        public void sendMessage(String message) {
+            PrintWriter out = playerWriters.get(this);
+            if (out != null) {
+                out.println(message);
+            }
+        }
     }
 }
