@@ -11,7 +11,7 @@ public class GameServer {
     private static List<Player> players = new ArrayList<>();
     private static Map<Player, PrintWriter> playerWriters = new HashMap<>();
 
-    private static Random random = new Random();
+    private static final Random random = new Random();
 
     private static int treasureX;
     private static int treasureY;
@@ -19,16 +19,17 @@ public class GameServer {
     public static void main(String[] args) {
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             System.out.println("Server started on port " + PORT + "...");
-    
+
             // Generate random treasure location
             treasureX = random.nextInt(GRID_SIZE);
             treasureY = random.nextInt(GRID_SIZE);
             System.out.println("Treasure is located at: (" + treasureX + ", " + treasureY + ")");
-    
+
             while (true) {
+                // waiting for a client to connect (a play to join the game)
                 Socket clientSocket = serverSocket.accept();
                 System.out.println("Client connected!");
-    
+
                 // Create a new player and a thread to handle this player
                 Player player = new Player(clientSocket);
                 players.add(player);
@@ -58,6 +59,7 @@ public class GameServer {
                 out.println("Welcome! Enter your name:");
                 String playerName = in.readLine();
                 player.setName(playerName);
+                System.out.println("Player named " + playerName + " joined!");
 
                 // Start broadcasting game state
                 broadcastGameState();
@@ -106,7 +108,10 @@ public class GameServer {
 
     // Broadcast game state to all players
     private static void broadcastGameState() {
-        StringBuilder gameState = new StringBuilder("Current Game State:\n");
+        StringBuilder gameState = new StringBuilder("\nCurrent Game State:\n");
+
+        int playersCount = players.size();
+        gameState.append(playersCount).append(" active players.\n");
 
         // Show player positions
         for (Player player : players) {

@@ -36,7 +36,7 @@ public class GameClient extends Application {
         gameStateArea.setPrefHeight(400);
 
         commandField = new TextField();
-        commandField.setPromptText("Enter command (UP, DOWN, LEFT, RIGHT, DIG)");
+        commandField.setPromptText("Enter command (UP, DOWN, LEFT, RIGHT, DIG) to move");
         commandField.setOnAction(event -> sendCommand(commandField.getText()));
 
         root.getChildren().addAll(new Label("Game State:"), gameStateArea, commandField);
@@ -52,12 +52,11 @@ public class GameClient extends Application {
 
     // Connect to the server
     private void connectToServer() {
-        try (Socket socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
-             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-             PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
-    
-            this.out = out;
-    
+        try {
+            socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
+            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            out = new PrintWriter(socket.getOutputStream(), true);
+
             // Read server messages in a separate thread
             String message;
             while ((message = in.readLine()) != null) {
@@ -72,7 +71,7 @@ public class GameClient extends Application {
 
     // Send commands to the server
     private void sendCommand(String command) {
-        if (command != null && !command.isEmpty()) {
+        if (command != null && !command.isEmpty() && out != null) {
             out.println(command);
             commandField.clear();
         }
@@ -82,5 +81,24 @@ public class GameClient extends Application {
     private void updateGameState(String message) {
         // Append the new message to the text area
         gameStateArea.appendText(message + "\n");
+    }
+
+    @Override
+    public void stop() {
+        // Close resources gracefully
+        System.out.println("Stopping client...");
+        try {
+            if (out != null) {
+                out.close();
+            }
+            if (in != null) {
+                in.close();
+            }
+            if (socket != null && !socket.isClosed()) {
+                socket.close();
+            }
+        } catch (IOException e) {
+            System.err.println("Error closing client resources: " + e.getMessage());
+        }
     }
 }
