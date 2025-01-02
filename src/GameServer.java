@@ -1,5 +1,11 @@
-import java.io.*;
-import java.net.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class GameServer {
@@ -76,6 +82,8 @@ public class GameServer {
 
         // Handle player commands (UP, DOWN, LEFT, RIGHT, DIG)
         private void handleCommand(String command, Player player) {
+            System.out.println("<" + player.getName() + ">" + " sends command: " + command.toUpperCase());
+
             switch (command.toUpperCase()) {
                 case "UP":
                     player.moveUp();
@@ -108,10 +116,23 @@ public class GameServer {
 
     // Broadcast game state to all players
     private static void broadcastGameState() {
-        StringBuilder gameState = new StringBuilder("\nCurrent Game State:\n");
+        // Get the current timestamp
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+
+        // Build the game state message
+        StringBuilder gameState = new StringBuilder("\nCurrent Game State (");
+
+        // Include the timestamp in the message
+        gameState.append(timestamp).append(") \n");
 
         int playersCount = players.size();
-        gameState.append(playersCount).append(" active players.\n");
+        gameState.append(playersCount);
+        if (playersCount <= 1) {
+            gameState.append(" active player.\n");
+
+        } else {
+            gameState.append(" active players.\n");
+        }
 
         // Show player positions
         for (Player player : players) {

@@ -39,7 +39,7 @@ public class GameClient extends Application {
         commandField.setPromptText("Enter command (UP, DOWN, LEFT, RIGHT, DIG) to move");
         commandField.setOnAction(event -> sendCommand(commandField.getText()));
 
-        root.getChildren().addAll(new Label("Game State:"), gameStateArea, commandField);
+        root.getChildren().addAll(new Label(" Enjoy your game! "), gameStateArea, commandField);
 
         Scene scene = new Scene(root, 400, 500);
         primaryStage.setTitle("Treasure Hunt Game Client");
